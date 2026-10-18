@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""astpp.py - Self-Inlining Macro Preprocessor & Runtime Polyfill Library.
+"""Self-Inlining Python Macro Preprocessor & Runtime Polyfill Library.
+
+Homepage:
+---------
+https://github.com/f-fix/astpp
 
 Overview:
 ---------
@@ -123,6 +127,23 @@ except ImportError:
         return x
 
 
+def keep(obj):
+    """Identity decorator: keeps the decorated function or class as-is.
+
+    When processed by `astpp`, the `@keep` decorator is stripped from the AST so that the
+    compiled output incurs zero runtime decorator invocation overhead.
+    """
+    return obj
+
+
+def omit(obj):
+    """Omission decorator: drops the decorated function or class completely.
+
+    When processed by `astpp`, any node decorated with `@omit` is purged from the parse tree.
+    """
+    return None
+
+
 def keep_if(cond):
     """Conditional decorator factory that preserves the target definition if cond is True.
 
@@ -130,11 +151,11 @@ def keep_if(cond):
         cond: Expression evaluating to a truthy or falsy value.
 
     Returns:
-        An identity decorator `lambda obj: obj` if cond is True, or `lambda obj: None` if False.
+        The identity decorator `keep` if cond is True, or `omit` if False.
         When processed by `astpp`, the decorator is stripped if kept, or the entire node is
         deleted from the AST if omitted.
     """
-    return (lambda obj: obj) if cond else (lambda obj: None)
+    return keep if cond else omit
 
 
 def omit_if(cond):
@@ -144,24 +165,11 @@ def omit_if(cond):
         cond: Expression evaluating to a truthy or falsy value.
 
     Returns:
-        An omission decorator `lambda obj: None` if cond is True, or `lambda obj: obj` if False.
+        The omission decorator `omit` if cond is True, or `keep` if False.
         When processed by `astpp`, the entire target node is pruned from the AST if omitted.
     """
-    return (lambda obj: None) if cond else (lambda obj: obj)
+    return omit if cond else keep
 
-
-keep = keep_if(True)
-"""Identity decorator: keeps the decorated function or class as-is.
-
-When processed by `astpp`, the `@keep` decorator is stripped from the AST so that the
-compiled output incurs zero runtime decorator invocation overhead.
-"""
-
-omit = keep_if(False)
-"""Omission decorator: drops the decorated function or class completely.
-
-When processed by `astpp`, any node decorated with `@omit` is purged from the parse tree.
-"""
 
 try:
     import micropython as _real_mpy
@@ -477,12 +485,10 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
                 ):
                     names = {a.name for a in stmt.names}
                     needed = set(names)
-                    if any(k in needed for k in ("keep", "omit", "omit_if")):
-                        needed.add("keep_if")
+                    if any(k in needed for k in ("keep_if", "omit_if")):
+                        needed.update(["keep", "omit"])
                     if "micropython" in needed:
-                        needed.update(
-                            ["keep_if", "keep", "_real_mpy", "_MicroPythonShim"]
-                        )
+                        needed.update(["keep", "_real_mpy", "_MicroPythonShim"])
 
                     for helper in self_helpers:
                         h_defs = _defined_names(helper)
@@ -564,6 +570,7 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
             self._strip_docstrings(node.body)
             new_decs = []
             for d in node.decorator_list:
+                dec_str = ast.unparse(d)
                 if isinstance(d, ast.Call) and getattr(d.func, "id", None) in (
                     "keep_if",
                     "omit_if",
@@ -572,8 +579,9 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
                     if d.func.id == "omit_if":
                         cond = not cond
                     res = "keep" if cond else "omit"
+                elif dec_str in ("keep", "omit"):
+                    res = dec_str
                 else:
-                    dec_str = ast.unparse(d)
                     res = defines.get(dec_str, dec_str)
 
                 if res == "omit":
