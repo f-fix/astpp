@@ -295,7 +295,7 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
     if args.test:
         if not __debug__:
             stderr.write("--test is not available in optimized builds\n")
-            if hasattr(stderr, 'flush'):
+            if hasattr(stderr, "flush"):
                 stderr.flush()
             return 1
         try:
@@ -629,6 +629,7 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
 def main():
     """Command-line entrypoint for pip-installed astpp console script."""
     import sys
+
     sys.exit(astpp_main(sys.argv[1:], sys.stdin, sys.stdout, sys.stderr))
 
 
