@@ -16,6 +16,36 @@ Project Homepage: [https://github.com/f-fix/astpp](https://github.com/f-fix/astp
 2. **Compile-Time Preprocessor (Zero-Dependency Production Builds)**:
    When invoked as a script or via `astpp_main()`, `astpp` inspects the consumer's Abstract Syntax Tree (AST), removes `from astpp import ...` statements completely, and inlines minimal self-contained fallback definitions copied directly from its own source code. The emitted code has **zero external runtime dependencies** on `astpp.py`.
 
+## Installation
+
+### Via `pip` (CPython / PyPy / Host PC)
+
+```bash
+# Install from PyPI (when published):
+pip install astpp
+
+# Or install directly from GitHub:
+pip install git+https://github.com/f-fix/astpp.git
+
+# Or install locally in editable development mode:
+pip install -e .
+```
+
+### Via `mip` (MicroPython)
+
+```python
+# In MicroPython REPL (on Wi-Fi / Ethernet enabled board):
+import mip
+mip.install("github:f-fix/astpp")
+```
+
+```bash
+# Or from your host computer over USB/UART via mpremote:
+mpremote mip install github:f-fix/astpp
+```
+
+---
+
 ---
 
 ## Key Features

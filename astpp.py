@@ -188,6 +188,8 @@ else:
 
     micropython = _MicroPythonShim()
 
+__version__ = "0.1.0"
+
 
 # ==============================================================================
 # 2. PREPROCESSOR ENTRYPOINT & SELF-TEST SUITE
@@ -620,7 +622,11 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
     return 0
 
 
-if __name__ == "__main__":
+def main():
+    """Command-line entrypoint for pip-installed astpp console script."""
     import sys
-
     sys.exit(astpp_main(sys.argv[1:], sys.stdin, sys.stdout, sys.stderr))
+
+
+if __name__ == "__main__":
+    main()
