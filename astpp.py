@@ -548,18 +548,30 @@ if not _OMIT_MAIN:
                 right = self._eval_const(node.right)
                 if left is not _UNEVALUATED and right is not _UNEVALUATED:
                     try:
-                        if isinstance(node.op, ast.Add): return left + right
-                        if isinstance(node.op, ast.Sub): return left - right
-                        if isinstance(node.op, ast.Mult): return left * right
-                        if isinstance(node.op, ast.Div): return left / right
-                        if isinstance(node.op, ast.FloorDiv): return left // right
-                        if isinstance(node.op, ast.Mod): return left % right
-                        if isinstance(node.op, ast.Pow): return left ** right
-                        if isinstance(node.op, ast.LShift): return left << right
-                        if isinstance(node.op, ast.RShift): return left >> right
-                        if isinstance(node.op, ast.BitOr): return left | right
-                        if isinstance(node.op, ast.BitXor): return left ^ right
-                        if isinstance(node.op, ast.BitAnd): return left & right
+                        if isinstance(node.op, ast.Add):
+                            return left + right
+                        if isinstance(node.op, ast.Sub):
+                            return left - right
+                        if isinstance(node.op, ast.Mult):
+                            return left * right
+                        if isinstance(node.op, ast.Div):
+                            return left / right
+                        if isinstance(node.op, ast.FloorDiv):
+                            return left // right
+                        if isinstance(node.op, ast.Mod):
+                            return left % right
+                        if isinstance(node.op, ast.Pow):
+                            return left**right
+                        if isinstance(node.op, ast.LShift):
+                            return left << right
+                        if isinstance(node.op, ast.RShift):
+                            return left >> right
+                        if isinstance(node.op, ast.BitOr):
+                            return left | right
+                        if isinstance(node.op, ast.BitXor):
+                            return left ^ right
+                        if isinstance(node.op, ast.BitAnd):
+                            return left & right
                     except Exception:
                         pass
                 return _UNEVALUATED
@@ -590,17 +602,28 @@ if not _OMIT_MAIN:
                     if right is _UNEVALUATED:
                         return _UNEVALUATED
                     try:
-                        if isinstance(op, ast.Eq): matched = (cur == right)
-                        elif isinstance(op, ast.NotEq): matched = (cur != right)
-                        elif isinstance(op, ast.Lt): matched = (cur < right)
-                        elif isinstance(op, ast.LtE): matched = (cur <= right)
-                        elif isinstance(op, ast.Gt): matched = (cur > right)
-                        elif isinstance(op, ast.GtE): matched = (cur >= right)
-                        elif isinstance(op, ast.Is): matched = (cur is right)
-                        elif isinstance(op, ast.IsNot): matched = (cur is not right)
-                        elif isinstance(op, ast.In): matched = (cur in right)
-                        elif isinstance(op, ast.NotIn): matched = (cur not in right)
-                        else: return _UNEVALUATED
+                        if isinstance(op, ast.Eq):
+                            matched = cur == right
+                        elif isinstance(op, ast.NotEq):
+                            matched = cur != right
+                        elif isinstance(op, ast.Lt):
+                            matched = cur < right
+                        elif isinstance(op, ast.LtE):
+                            matched = cur <= right
+                        elif isinstance(op, ast.Gt):
+                            matched = cur > right
+                        elif isinstance(op, ast.GtE):
+                            matched = cur >= right
+                        elif isinstance(op, ast.Is):
+                            matched = cur is right
+                        elif isinstance(op, ast.IsNot):
+                            matched = cur is not right
+                        elif isinstance(op, ast.In):
+                            matched = cur in right
+                        elif isinstance(op, ast.NotIn):
+                            matched = cur not in right
+                        else:
+                            return _UNEVALUATED
                     except Exception:
                         return _UNEVALUATED
                     if not matched:
@@ -711,10 +734,7 @@ if not _OMIT_MAIN:
                     if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
                         return node.orelse[0]
                     return node.orelse
-            if (
-                len(node.orelse) == 1
-                and isinstance(node.orelse[0], ast.If)
-            ):
+            if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
                 sub_cond = self._eval_const(node.orelse[0].test)
                 if sub_cond is not _UNEVALUATED and not bool(sub_cond):
                     node.orelse = node.orelse[0].orelse
