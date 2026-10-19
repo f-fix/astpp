@@ -56,7 +56,6 @@ BUFFER_SIZE = const(1024)
 Flags: -DBUFFER_SIZE=512 -O
 Output:
 ```python
-_X = const(True)
 BUFFER_SIZE = const(512)
 ```
 
@@ -190,7 +189,7 @@ else:
 
 _OMIT_MAIN = const(False)
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 
 # ==============================================================================
@@ -365,6 +364,7 @@ def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
                 src = """
 _FLAG = const(True)
 _VAL = const(42)
+PUBLIC_CONST = const(100)
 
 if not _FLAG:
     dead_code_1 = 1
@@ -392,6 +392,32 @@ elif _VAL < 50:
                 self.assertIn("live_code_1 = 2", out)
                 self.assertIn("live_code_2 = 3", out)
                 self.assertIn("live_code_3 = 6", out)
+                self.assertNotIn("_FLAG = const", out)
+                self.assertNotIn("_VAL = const", out)
+                self.assertIn("PUBLIC_CONST = const(100)", out)
+
+            def test_empty_nested_blocks_receive_pass(self):
+                """Validate that nested blocks stripped of all statements receive 'pass'."""
+                import io
+
+                src = """
+if runtime_check():
+    _STRIPPED = const(1)
+
+def empty_after_assert():
+    assert False
+
+class EmptyClass:
+    _INNER = const(2)
+"""
+                fake_in = io.StringIO(src)
+                fake_out = io.StringIO()
+                rc = astpp_main(["-O"], fake_in, fake_out, io.StringIO())
+                self.assertEqual(rc, 0)
+                out = fake_out.getvalue()
+                self.assertIn("if runtime_check():\n    pass", out)
+                self.assertIn("def empty_after_assert():\n    pass", out)
+                self.assertIn("class EmptyClass:\n    pass", out)
 
             def test_omit_main_pruning(self):
                 """Validate that -D_OMIT_MAIN=True drops @omit_if(_OMIT_MAIN) functions and if not _OMIT_MAIN blocks."""
@@ -416,7 +442,7 @@ if not _OMIT_MAIN:
                 out = fake_out.getvalue()
                 self.assertNotIn("def main", out)
                 self.assertNotIn('__name__ == "__main__"', out)
-                self.assertIn("_OMIT_MAIN = const(True)", out)
+                self.assertNotIn("_OMIT_MAIN", out)
 
             def test_cli_help_flag(self):
                 """Validate that --help writes formatted usage to stdout without process exit."""
@@ -686,8 +712,52 @@ if not _OMIT_MAIN:
             """Eliminate assert statements when optimization level >= 1 (-O / -O1)."""
             return None if (opt_level and opt_level >= 1) else node
 
+        def generic_visit(self, node):
+            had_orelse = isinstance(getattr(node, "orelse", None), list) and bool(
+                node.orelse
+            )
+            had_final = isinstance(getattr(node, "finalbody", None), list) and bool(
+                node.finalbody
+            )
+
+            super().generic_visit(node)
+
+            if (
+                hasattr(node, "body")
+                and isinstance(node.body, list)
+                and not isinstance(node, ast.Module)
+            ):
+                if len(node.body) == 0:
+                    node.body.append(ast.Pass())
+
+            if hasattr(node, "handlers"):
+                for h in node.handlers:
+                    if (
+                        hasattr(h, "body")
+                        and isinstance(h.body, list)
+                        and len(h.body) == 0
+                    ):
+                        h.body.append(ast.Pass())
+
+            if (
+                had_orelse
+                and isinstance(getattr(node, "orelse", None), list)
+                and len(node.orelse) == 0
+            ):
+                node.orelse.append(ast.Pass())
+
+            if (
+                had_final
+                and isinstance(getattr(node, "finalbody", None), list)
+                and len(node.finalbody) == 0
+            ):
+                node.finalbody.append(ast.Pass())
+
+            return node
+
         def visit_Assign(self, node):
             """Harvest in-code const() definitions and apply -D constant overrides."""
+            is_const = False
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     name = target.id
@@ -699,6 +769,7 @@ if not _OMIT_MAIN:
                             args=[ast.Constant(value=val)],
                             keywords=[],
                         )
+                        is_const = True
                     elif (
                         isinstance(node.value, ast.Call)
                         and getattr(node.value.func, "id", None) == "const"
@@ -706,19 +777,46 @@ if not _OMIT_MAIN:
                         val = self._eval_const(node.value.args[0])
                         if val is not _UNEVALUATED:
                             self.constants[name] = val
+                        is_const = True
+
+            if is_const:
+                if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    if node.targets[0].id.startswith("_"):
+                        return None
+            return self.generic_visit(node)
+
+        def visit_AnnAssign(self, node):
+            if isinstance(node.target, ast.Name):
+                name = node.target.id
+                if name in defines:
+                    val = defines[name]
+                    self.constants[name] = val
+                    if name.startswith("_"):
+                        return None
+                    node.value = ast.Call(
+                        func=ast.Name(id="const", ctx=ast.Load()),
+                        args=[ast.Constant(value=val)],
+                        keywords=[],
+                    )
+                elif (
+                    node.value is not None
+                    and isinstance(node.value, ast.Call)
+                    and getattr(node.value.func, "id", None) == "const"
+                ):
+                    val = self._eval_const(node.value.args[0])
+                    if val is not _UNEVALUATED:
+                        self.constants[name] = val
+                    if name.startswith("_"):
+                        return None
             return self.generic_visit(node)
 
         def visit_Name(self, node):
             """Inline known compile-time constants directly into load expressions."""
-            if (
-                opt_level
-                and opt_level >= 1
-                and isinstance(node.ctx, ast.Load)
-                and node.id in self.constants
-            ):
-                val = self.constants[node.id]
-                if isinstance(val, (bool, int, str, bytes, type(None))):
-                    return ast.Constant(value=val)
+            if isinstance(node.ctx, ast.Load) and node.id in self.constants:
+                if node.id.startswith("_") or (opt_level and opt_level >= 1):
+                    val = self.constants[node.id]
+                    if isinstance(val, (bool, int, str, bytes, type(None))):
+                        return ast.Constant(value=val)
             return node
 
         def visit_If(self, node):
