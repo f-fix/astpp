@@ -190,12 +190,13 @@ else:
 
 _OMIT_MAIN = const(False)
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 # ==============================================================================
 # 2. PREPROCESSOR ENTRYPOINT & SELF-TEST SUITE
 # ==============================================================================
+@omit_if(_OMIT_MAIN)
 def astpp_main(argv=None, stdin=None, stdout=None, stderr=None):
     """Programmatic entrypoint for AST-level preprocessing, help display, and self-testing.
 
