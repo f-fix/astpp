@@ -4,7 +4,7 @@
 
 Project Homepage: [https://github.com/f-fix/astpp](https://github.com/f-fix/astpp)
 
-PyPI Entry: https://pypi.org/project/astpp/0.1.0/
+PyPI Project Page: https://pypi.org/project/astpp/
 
 ---
 
