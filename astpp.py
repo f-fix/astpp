@@ -189,7 +189,7 @@ else:
 
 _OMIT_MAIN = const(False)
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 
 # ==============================================================================
@@ -705,12 +705,28 @@ if not _OMIT_MAIN:
                         new_body.extend(transformed)
                     else:
                         new_body.append(transformed)
-            node.body = new_body
+            node.body = [stmt for stmt in new_body if not isinstance(stmt, ast.Pass)]
             return node
 
         def visit_Assert(self, node):
             """Eliminate assert statements when optimization level >= 1 (-O / -O1)."""
             return None if (opt_level and opt_level >= 1) else node
+
+        def _visit_stmts(self, stmts):
+            res = []
+            for stmt in stmts:
+                t = self.visit(stmt)
+                if t is not None:
+                    if isinstance(t, list):
+                        res.extend(t)
+                    else:
+                        res.append(t)
+            return res
+
+        def _ensure_non_empty(self, body):
+            if isinstance(body, list) and len(body) == 0:
+                body.append(ast.Pass())
+            return body
 
         def generic_visit(self, node):
             had_orelse = isinstance(getattr(node, "orelse", None), list) and bool(
@@ -722,12 +738,16 @@ if not _OMIT_MAIN:
 
             super().generic_visit(node)
 
-            if (
-                hasattr(node, "body")
-                and isinstance(node.body, list)
-                and not isinstance(node, ast.Module)
+            # Ensure non-empty body for compound statement nodes (loops, with, try)
+            if isinstance(
+                node,
+                (ast.While, ast.For, ast.AsyncFor, ast.With, ast.AsyncWith, ast.Try),
             ):
-                if len(node.body) == 0:
+                if (
+                    hasattr(node, "body")
+                    and isinstance(node.body, list)
+                    and len(node.body) == 0
+                ):
                     node.body.append(ast.Pass())
 
             if hasattr(node, "handlers"):
@@ -739,12 +759,13 @@ if not _OMIT_MAIN:
                     ):
                         h.body.append(ast.Pass())
 
-            if (
-                had_orelse
-                and isinstance(getattr(node, "orelse", None), list)
-                and len(node.orelse) == 0
-            ):
-                node.orelse.append(ast.Pass())
+            if isinstance(node, (ast.While, ast.For, ast.AsyncFor, ast.Try)):
+                if (
+                    had_orelse
+                    and isinstance(getattr(node, "orelse", None), list)
+                    and len(node.orelse) == 0
+                ):
+                    node.orelse.append(ast.Pass())
 
             if (
                 had_final
@@ -813,30 +834,40 @@ if not _OMIT_MAIN:
         def visit_Name(self, node):
             """Inline known compile-time constants directly into load expressions."""
             if isinstance(node.ctx, ast.Load) and node.id in self.constants:
-                if node.id.startswith("_") or (opt_level and opt_level >= 1):
-                    val = self.constants[node.id]
-                    if isinstance(val, (bool, int, str, bytes, type(None))):
-                        return ast.Constant(value=val)
+                val = self.constants[node.id]
+                if isinstance(val, (bool, int, str, bytes, type(None))):
+                    return ast.Constant(value=val)
             return node
 
         def visit_If(self, node):
             """Eliminate dead branches and promote reachable bodies for compile-time if/elif/else."""
-            self.generic_visit(node)
             cond = self._eval_const(node.test)
             if cond is not _UNEVALUATED:
                 if bool(cond):
-                    node.orelse = []
-                    return node.body
+                    return self._visit_stmts(node.body)
                 else:
                     if not node.orelse:
                         return None
                     if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
-                        return node.orelse[0]
-                    return node.orelse
+                        return self.visit(node.orelse[0])
+                    return self._visit_stmts(node.orelse)
+
+            # Condition cannot be statically evaluated: the if statement remains
+            had_orelse = isinstance(getattr(node, "orelse", None), list) and bool(
+                node.orelse
+            )
+            node.test = self.visit(node.test)
+            node.body = self._visit_stmts(node.body)
+            self._ensure_non_empty(node.body)
+
             if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
-                sub_cond = self._eval_const(node.orelse[0].test)
-                if sub_cond is not _UNEVALUATED and not bool(sub_cond):
-                    node.orelse = node.orelse[0].orelse
+                sub = self.visit(node.orelse[0])
+                node.orelse = [sub] if sub is not None else []
+            else:
+                node.orelse = self._visit_stmts(node.orelse)
+                if had_orelse and len(node.orelse) == 0:
+                    node.orelse.append(ast.Pass())
+
             return node
 
         def _handle_def(self, node):
@@ -867,7 +898,13 @@ if not _OMIT_MAIN:
                     continue
                 new_decs.append(d)
             node.decorator_list = new_decs
-            return self.generic_visit(node)
+            if hasattr(node, "args"):
+                node.args = self.visit(node.args)
+            if hasattr(node, "returns") and node.returns:
+                node.returns = self.visit(node.returns)
+            node.body = self._visit_stmts(node.body)
+            self._ensure_non_empty(node.body)
+            return node
 
         def visit_FunctionDef(self, node):
             """Process function definitions, handling decorators and docstring stripping."""
