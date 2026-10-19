@@ -23,7 +23,7 @@ PyPI Project Page: https://pypi.org/project/astpp/
 ### Via `pip` (CPython / PyPy / Host PC)
 
 ```bash
-# Install from PyPI (when published):
+# Install from PyPI:
 pip install astpp
 
 # Or install directly from GitHub:
