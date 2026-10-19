@@ -55,7 +55,9 @@ mpremote mip install github:f-fix/astpp
 - **Macro Definitions (`-DNAME=VALUE`)**:
   Rewrites target assignments `NAME = ...` to `NAME = const(VALUE)`. Inlined constants are propagated directly into expressions throughout the module.
 - **Dead-Branch Elimination**:
-  Resolves `if`, `elif`, and `else` branches whose conditions evaluate to compile-time constants. Dead branches are pruned from the AST, while active branches are promoted or spliced without leaving ghost `pass` statements.
+  Resolves `if`, `elif`, and `else` branches whose conditions evaluate to compile-time constants (including comparisons `==`, `!=`, `<`, `<=`, `>`, `>=`, `is`, `is not`, `in`, `not in`, and boolean logic `not`, `and`, `or`). Dead branches are pruned from the AST, while active branches are promoted or spliced without leaving ghost `pass` statements.
+- **Conditional CLI / Main Omission (`_OMIT_MAIN`)**:
+  Supports conditional omission of CLI logic via `_OMIT_MAIN = const(False)` with `@omit_if(_OMIT_MAIN)` and `if not _OMIT_MAIN:` guards, enabling compact library-only builds via `astpp -D_OMIT_MAIN=True`.
 - **Symmetric Conditional Decorators (`@keep`, `@omit`, `@keep_if`, `@omit_if`)**:
   - `@keep`: Preserves the definition and strips the decorator (zero runtime overhead).
   - `@omit`: Drops the decorated function or class from the parse tree completely.
